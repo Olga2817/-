@@ -1,57 +1,137 @@
 #include <iostream>
-#include <exception>
+#include <string>
 #include "player.hpp"
-#include "bet.hpp"
 #include "table.hpp"
+#include "bet.hpp"
 #include "game_service.hpp"
 #include "logger.hpp"
+#include <fstream>
+#include <vector>
+
+void saveResultsToFile(const std::string& filename, const std::vector<double>& balances) {
+    std::ofstream outFile(filename);
+    if (!outFile.is_open()) {
+        std::cerr << "Ошибка открытия файла для записи!" << std::endl;
+        return;
+    }
+    
+    for (size_t i = 0; i < balances.size(); ++i) {
+        outFile << i << " " << balances[i] << "\n";
+    }
+    outFile.close();
+    std::cout << "Результаты успешно сохранены в " << filename << std::endl;
+}
 
 int main() {
     std::setlocale(LC_ALL, "Russian");
 
     LOG_INF("Запуск симулятора казино...");
 
-    try {
+    std::string player_name;
+    std::cout << "Введите имя игрока: ";
+    std::cin >> player_name;
 
-        Player player("Player_777", 10000);
-        LOG_INF("Игрок создан: Имя = %s, Баланс = %lld", player.id().c_str(), player.balance());
+    int64_t initial_balance = 0;
+    std::cout << "Введите начальный баланс (руб.): ";
+    std::cin >> initial_balance;
 
-        CasinoTable table(100000, 100, 5000);
-        LOG_INF("Стол казино открыт. Касса стола = %lld, Лимиты: [%lld - %lld]", 
-                table.casino_cash(), table.min_bet(), table.max_bet());
+    Player player(player_name, initial_balance);
 
-        GameService game_service(table);
+    CasinoTable table(1000000, 10, 50000); 
+    GameService game_service(table);
 
-        LOG_INF("Раунд 1: Ставка на число 17: ");
-        Bet bet1 = Bet::on_number(17, 500);
+    std::vector<double> balance_history;
+    balance_history.push_back(static_cast<double>(player.balance()));
 
-        if (table.validate_bet(bet1, player)) {
-            int rolled1 = game_service.play_round(player, bet1);
-            LOG_INF("Колесо рулетки остановилось. Выпало число: %d", rolled1);
-            LOG_INF("Текущий баланс игрока: %lld | Касса казино: %lld", player.balance(), table.casino_cash());
-        } else {
-            LOG_ERR("Ставка отклонена правилами стола или балансом игрока!");
+    int choice = 0;
+    do {
+        std::cout << " Игрок: " << player.id() 
+                  << " | Баланс: " << player.balance() << " руб.\n";
+        std::cout << "1. Сделать ставку на число (0-36)\n";
+        std::cout << "2. Сделать ставку на цвет (Красный/Черный/Зеленый)\n";
+        std::cout << "3. Выйти из казино\n";
+        std::cout << "Ваш выбор: ";
+        std::cin >> choice;
+
+        if (choice == 1) {
+            int64_t amount = 0;
+            int target_number = -1;
+
+            std::cout << "Введите сумму ставки: ";
+            std::cin >> amount;
+
+            std::cout << "На какое число ставите (от 0 до 36): ";
+            std::cin >> target_number;
+
+            try {
+                Bet bet = Bet::on_number(target_number, amount);
+
+                std::cout << "\nКрутим колесо рулетки...\n";
+                int rolled_number = game_service.play_round(player, bet);
+                
+                std::cout << ">>> Выпало число: " << rolled_number << " <<<\n";
+                std::cout << "Текущий баланс: " << player.balance() << " руб.\n";
+
+                balance_history.push_back(static_cast<double>(player.balance()));
+
+            } catch (const std::exception& e) {
+                std::cout << "[ОШИБКА СТАВКИ]: " << e.what() << "\n";
+            }
+
+        } else if (choice == 2) {
+            int64_t amount = 0;
+            int color_choice = 0;
+
+            std::cout << "Введите сумму ставки: ";
+            std::cin >> amount;
+
+            std::cout << "Выберите цвет:\n";
+            std::cout << "1. Красный (RED)\n";
+            std::cout << "2. Черный (BLACK)\n";
+            std::cout << "3. Зеленый (GREEN)\n";
+            std::cout << "Ваш выбор цвета: ";
+            std::cin >> color_choice;
+
+            Color chosen_color = Color::RED;
+            if (color_choice == 1) {
+                chosen_color = Color::RED;
+            } else if (color_choice == 2) {
+                chosen_color = Color::BLACK;
+            } else if (color_choice == 3) {
+                chosen_color = Color::GREEN;
+            } else {
+                std::cout << "Неверный выбор цвета! Попробуйте снова.\n";
+                continue;
+            }
+
+            try {
+                Bet bet = Bet::on_color(chosen_color, amount);
+
+                std::cout << "\nКрутим колесо рулетки (ставка на цвет)...\n";
+                int rolled_number = game_service.play_round(player, bet);
+                
+                std::cout << ">>> Выпало число: " << rolled_number << " <<<\n";
+                std::cout << "Текущий баланс: " << player.balance() << " руб.\n";
+
+                balance_history.push_back(static_cast<double>(player.balance()));
+
+            } catch (const std::exception& e) {
+                std::cout << "[ОШИБКА СТАВКИ]: " << e.what() << "\n";
+            }
+
+        } else if (choice != 3) {
+            std::cout << "Неверный выбор. Попробуйте снова.\n";
         }
 
-        std::cout << "\n----------------------------------------\n\n";
-
-        LOG_INF("Раунд 2: Ставка на КРАСНЫЙ цвет: ");
-        Bet bet2 = Bet::on_color(Color::RED, 1000);
-
-        if (table.validate_bet(bet2, player)) {
-            int rolled2 = game_service.play_round(player, bet2);
-            LOG_INF("Колесо рулетки остановилось. Выпало число: %d", rolled2);
-            LOG_INF("Текущий баланс игрока: %lld | Касса казино: %lld", player.balance(), table.casino_cash());
-        } else {
-            LOG_ERR("Ставка отклонена правилами стола или балансом игрока!");
+        if (player.balance() <= 0) {
+            std::cout << "\nУ вас совсем не осталось денег! Игра окончена.\n";
+            break;
         }
 
-        LOG_INF("Игра завершена.");
+    } while (choice != 3);
 
-    } catch (const std::exception& e) {
-        LOG_ERR("Произошла критическая ошибка: %s", e.what());
-        return 1;
-    }
+    saveResultsToFile("simulation_results.txt", balance_history);
 
+    std::cout << "\nСпасибо за игру! Ваш конечный баланс: " << player.balance() << " руб.\n";
     return 0;
 }

@@ -1,17 +1,21 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -g
-TARGET = homework2
-HEADERS = complex.hpp algebraic.hpp trigonometric.hpp quad.hpp
+CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude
+SRC = src/bet.cpp src/player.cpp src/table.cpp src/main.cpp
+OBJ = $(SRC:.cpp=.o)
+TARGET = casino_app
 
 all: $(TARGET)
 
-$(TARGET): main.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) main.cpp -o $(TARGET)
+$(TARGET): $(OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-run: $(TARGET)
-	./$(TARGET)
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -f src/*.o $(TARGET) run_tests
 
-rebuild: clean all	
+test:
+	$(CXX) $(CXXFLAGS) tests/table_test.cpp src/bet.cpp src/player.cpp src/table.cpp -lgtest -lgtest_main -pthread -o run_tests
+	./run_tests
+	rm -f run_tests
